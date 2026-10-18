@@ -1,0 +1,637 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="theme-color" content="#0f1420">
+<title>Where the Wind Goes</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent;}
+html,body{
+  width:100%;height:100%;overflow:hidden;
+  background:#0f1420;
+  font-family:"Songti SC","STSong","Noto Serif CJK SC",-apple-system,BlinkMacSystemFont,"PingFang SC",serif;
+  color:#e6e9f0;
+  user-select:none;-webkit-user-select:none;
+  touch-action:manipulation;
+}
+canvas{position:fixed;inset:0;display:block;}
+
+#head{
+  position:fixed;
+  top:0;left:0;right:0;
+  padding:calc(env(safe-area-inset-top,0px) + 30px) 26px 0;
+  text-align:center;
+  pointer-events:none;
+  z-index:6;
+}
+.en{
+  font-family:"Snell Roundhand","SnellRoundhand","Brush Script MT",cursive;
+  font-size:35px;
+  line-height:1.1;
+  color:rgba(240,242,247,.92);
+  font-weight:400;
+  letter-spacing:.4px;
+  text-shadow:0 0 34px rgba(150,170,200,.35);
+}
+.rule{
+  width:44px;height:1px;
+  margin:13px auto 10px;
+  background:linear-gradient(90deg,transparent,rgba(200,210,228,.4),transparent);
+}
+.zh{
+  font-size:11px;
+  letter-spacing:.58em;
+  text-indent:.58em;
+  color:rgba(190,200,220,.62);
+  font-weight:300;
+}
+
+#foot{
+  position:fixed;
+  left:0;right:0;
+  bottom:calc(env(safe-area-inset-bottom,0px) + 26px);
+  text-align:center;
+  pointer-events:none;
+  z-index:6;
+}
+.sign{
+  display:inline-block;
+  font-size:10px;
+  letter-spacing:.42em;
+  text-indent:.42em;
+  color:rgba(180,190,208,.34);
+  font-weight:300;
+}
+
+#words{position:fixed;inset:0;pointer-events:none;z-index:5;}
+.word{
+  position:absolute;
+  transform:translate(-50%,0);
+  max-width:min(76vw,310px);
+  text-align:center;
+  font-size:13.5px;
+  line-height:1.95;
+  font-weight:300;
+  color:rgba(238,242,248,.95);
+  letter-spacing:.05em;
+  text-shadow:0 0 3px rgba(8,12,18,.9),0 0 22px rgba(10,14,20,.95),0 2px 16px rgba(0,0,0,.85);
+  opacity:0;
+  animation:drift 6.4s cubic-bezier(.22,.61,.36,1) forwards;
+  will-change:transform,opacity,filter;
+}
+.word.long{font-size:12.5px;line-height:2.05;max-width:min(80vw,330px);color:rgba(228,234,244,.92);}
+.word.short{font-size:15px;letter-spacing:.12em;}
+@keyframes drift{
+  0%{opacity:0;transform:translate(-50%,12px) scale(.97);filter:blur(5px);}
+  15%{opacity:1;transform:translate(-50%,0) scale(1);filter:blur(0);}
+  66%{opacity:1;transform:translate(-50%,-6px) scale(1);filter:blur(0);}
+  100%{opacity:0;transform:translate(-50%,-24px) scale(.99);filter:blur(3px);}
+}
+
+#veil{
+  position:fixed;inset:0;background:#0f1420;z-index:20;
+  pointer-events:none;transition:opacity 1.8s ease;
+}
+#veil.gone{opacity:0;}
+</style>
+</head>
+<body>
+
+<canvas id="c"></canvas>
+<div id="words"></div>
+
+<div id="head">
+  <div class="en">Where the Wind Goes</div>
+  <div class="rule"></div>
+  <div class="zh">風往哪兒去都行</div>
+</div>
+
+<div id="foot">
+  <div class="sign">for 小魚</div>
+</div>
+
+<div id="veil"></div>
+
+<script>
+(function(){
+  'use strict';
+
+  var cv = document.getElementById('c');
+  var ctx = cv.getContext('2d');
+  var wordsBox = document.getElementById('words');
+  var veil = document.getElementById('veil');
+
+  var W = 0, H = 0, DPR = 1;
+  var grass = [];
+  var seeds = [];
+  var gusts = [];
+  var placed = [];
+  var t0 = 0;
+
+  var SHORT = [
+    '風在這兒。',
+    '你可以躺下。',
+    '慢也行。',
+    '沒有人會催你。',
+    '你不用解釋。',
+    '風沒有主人。',
+    '草很多。',
+    '坐著就行。',
+    '不想說話也可以。',
+    '你想去哪就去哪。',
+    '這裡不記帳。',
+    '走快一點，草會讓開。',
+    '今天不必當個好孩子。',
+    '沒關係。',
+    '算了就算了。'
+  ];
+
+  var MID = [
+    '你走得比風慢也沒關係，草會一直等。',
+    '這個世界老是要你給個答案，這裡不要。',
+    '你想停就停，想走就走。',
+    '不是所有人都有力氣往前走，停下來也是走路的一種。',
+    '風往哪吹都不是錯的，你也是。',
+    '有些人在很年輕的時候就扛了很多。',
+    '你不是壞掉的，你只是很累。',
+    '你身上有很多別人看不見的東西，在這裡不用拿出來。',
+    '沒有人在這兒看著你，你想怎麼站就怎麼站。',
+    '今天過得不好，也算過了一天。',
+    '草不會問你為什麼。',
+    '這裡沒有門，也就沒有鎖。',
+    '你不需要先變好，才配坐在這兒。',
+    '風從很遠的地方來，它也不問要去哪。',
+    '累了就讓草替你站一會兒。',
+    '你走的時候它不追，你回來它還在這兒。',
+    '天空很大，大到你不用把自己收起來。',
+    '想哭就哭，這裡的草不管這個。',
+    '你不用一直用力。',
+    '這片地方沒有名字，所以也沒有人會說你走錯了。',
+    '世界吵，這兒不吵。',
+    '你可以走得沒有方向。'
+  ];
+
+  var LONG = [
+    '有些話你大概聽過很多次了，我不想再說一次。我只想告訴你，這片草不會要求你變好，它只是長在那兒，你來不來它都在。',
+    '你要是覺得自己不好，那就在這兒待著，反正草不管你這個。它們只看風，風往哪走它們就往哪倒，一點也不覺得丟臉。',
+    '我猜你有的時候會覺得自己是一個很麻煩的人。其實不是。你只是被塞進了一個太小的位置，被要求得太多了。',
+    '你不用把自己解釋給任何人聽。真的。這世上大部分提問的人都只是好奇，不是真的想懂你。',
+    '如果有一天你走得很累，就找一片草地躺下來。天上的雲會自己走，你不用跟著它。',
+    '你不需要被修好。你現在這個樣子，就已經足夠待在這個世界上了。剩下的那些是你的事，你慢慢來，沒有人規定時間。',
+    '我不知道你今天怎麼樣。這不重要。重要的是現在這一秒，你站在這兒，風吹過來了，那就夠了。',
+    '這個世界上有人把這片草留給你。不為什麼，也不是要你回報什麼。就是留著。你想來就來。'
+  ];
+
+  function resize(){
+    DPR = Math.min(window.devicePixelRatio || 1, 2);
+    W = window.innerWidth;
+    H = window.innerHeight;
+    cv.width  = Math.floor(W * DPR);
+    cv.height = Math.floor(H * DPR);
+    cv.style.width  = W + 'px';
+    cv.style.height = H + 'px';
+    ctx.setTransform(DPR, 0, 0, DPR, 0, 0);
+    growGrass();
+  }
+
+  function growGrass(){
+    grass = [];
+    var hz = H * 0.60;
+
+    var n1 = Math.round(W / 7);
+    if(n1 < 60) n1 = 60;
+    for(var i = 0; i < n1; i++){
+      grass.push({
+        x: Math.random() * (W + 40) - 20,
+        base: hz + Math.random() * H * 0.06,
+        h: H * (0.022 + Math.random() * 0.035),
+        sway: Math.random() * Math.PI * 2,
+        sp: 0.5 + Math.random() * 0.6,
+        lean: (Math.random() - 0.5) * 0.5,
+        w: 0.7,
+        a: 0.30 + Math.random() * 0.18,
+        col: '190,198,214'
+      });
+    }
+
+    var n2 = Math.round(W / 5.2);
+    if(n2 < 80) n2 = 80;
+    for(var j = 0; j < n2; j++){
+      grass.push({
+        x: Math.random() * (W + 40) - 20,
+        base: hz + H * 0.06 + Math.random() * H * 0.16,
+        h: H * (0.04 + Math.random() * 0.065),
+        sway: Math.random() * Math.PI * 2,
+        sp: 0.42 + Math.random() * 0.5,
+        lean: (Math.random() - 0.5) * 0.55,
+        w: 1,
+        a: 0.48 + Math.random() * 0.22,
+        col: '150,162,182'
+      });
+    }
+
+    var n3 = Math.round(W / 6);
+    if(n3 < 70) n3 = 70;
+    for(var k = 0; k < n3; k++){
+      grass.push({
+        x: Math.random() * (W + 60) - 30,
+        base: hz + H * 0.20 + Math.random() * H * 0.34,
+        h: H * (0.075 + Math.random() * 0.13),
+        sway: Math.random() * Math.PI * 2,
+        sp: 0.36 + Math.random() * 0.42,
+        lean: (Math.random() - 0.5) * 0.6,
+        w: 1.5 + Math.random() * 0.9,
+        a: 0.78 + Math.random() * 0.2,
+        col: '24,31,40'
+      });
+    }
+
+    grass.sort(function(a, b){ return a.base - b.base; });
+  }
+
+  function paintSky(){
+    var g = ctx.createLinearGradient(0, 0, 0, H * 0.72);
+    g.addColorStop(0.00, '#0c111c');
+    g.addColorStop(0.28, '#1a2135');
+    g.addColorStop(0.55, '#333850');
+    g.addColorStop(0.78, '#57546a');
+    g.addColorStop(1.00, '#7a7078');
+    ctx.fillStyle = g;
+    ctx.fillRect(0, 0, W, H * 0.72);
+
+    var hz = ctx.createLinearGradient(0, H * 0.54, 0, H * 0.68);
+    hz.addColorStop(0, 'rgba(150,128,120,0)');
+    hz.addColorStop(0.55, 'rgba(168,142,128,0.16)');
+    hz.addColorStop(1, 'rgba(140,116,108,0)');
+    ctx.fillStyle = hz;
+    ctx.fillRect(0, H * 0.54, W, H * 0.14);
+
+    var gg = ctx.createLinearGradient(0, H * 0.60, 0, H);
+    gg.addColorStop(0, '#2a3038');
+    gg.addColorStop(0.42, '#181d25');
+    gg.addColorStop(1, '#0a0d13');
+    ctx.fillStyle = gg;
+    ctx.fillRect(0, H * 0.60, W, H * 0.40);
+  }
+
+  var clouds = [];
+  function makeClouds(){
+    clouds = [];
+    for(var i = 0; i < 5; i++){
+      clouds.push({
+        x: Math.random() * W,
+        y: H * (0.10 + Math.random() * 0.34),
+        w: W * (0.28 + Math.random() * 0.32),
+        h: H * (0.018 + Math.random() * 0.026),
+        a: 0.045 + Math.random() * 0.055,
+        v: 0.018 + Math.random() * 0.03
+      });
+    }
+  }
+
+  function paintClouds(){
+    for(var i = 0; i < clouds.length; i++){
+      var c = clouds[i];
+      c.x += c.v;
+      if(c.x - c.w > W + 60) c.x = -c.w - 60;
+      var g = ctx.createRadialGradient(c.x, c.y, 0, c.x, c.y, c.w * 0.62);
+      g.addColorStop(0, 'rgba(214,222,236,' + c.a + ')');
+      g.addColorStop(0.6, 'rgba(206,214,230,' + (c.a * 0.42) + ')');
+      g.addColorStop(1, 'rgba(200,210,228,0)');
+      ctx.beginPath();
+      ctx.ellipse(c.x, c.y, c.w * 0.62, c.h, 0, 0, Math.PI * 2);
+      ctx.fillStyle = g;
+      ctx.fill();
+    }
+  }
+
+  function windAt(t){
+    return Math.sin(t * 0.00016) * 0.55 + Math.sin(t * 0.00041 + 1.7) * 0.28;
+  }
+
+  var last = 0;
+
+  function loop(ts){
+    if(!last) last = ts;
+    var dt = Math.min(ts - last, 46);
+    last = ts;
+    if(!t0) t0 = ts;
+
+    ctx.clearRect(0, 0, W, H);
+    paintSky();
+    paintClouds();
+
+    var w = windAt(ts);
+
+    for(var gi = gusts.length - 1; gi >= 0; gi--){
+      var gs = gusts[gi];
+      gs.life -= dt / 900;
+      if(gs.life <= 0) gusts.splice(gi, 1);
+    }
+
+    for(var i = 0; i < grass.length; i++){
+      var b = grass[i];
+      var swayAmp = b.h * 0.42;
+      var s = Math.sin(ts * 0.0011 * b.sp + b.sway) * 0.55 + Math.sin(ts * 0.0007 * b.sp + b.sway * 1.7) * 0.45;
+      var bend = b.lean * b.h * 0.5 + s * swayAmp * (0.5 + w * 0.9);
+
+      for(var q = 0; q < gusts.length; q++){
+        var gu = gusts[q];
+        var dx = gu.x - b.x;
+        var dy = gu.y - b.base;
+        var dd = Math.sqrt(dx * dx + dy * dy);
+        if(dd < gu.r){
+          var ff = (1 - dd / gu.r);
+          ff = ff * ff * gu.power * gu.life;
+          if(dx > 0){ bend -= ff * b.h; } else { bend += ff * b.h; }
+        }
+      }
+
+      if(bend > b.h * 1.1) bend = b.h * 1.1;
+      if(bend < -b.h * 1.1) bend = -b.h * 1.1;
+
+      var tipX = b.x + bend;
+      var tipY = b.base - b.h;
+      var ctrlX = b.x + bend * 0.32;
+      var ctrlY = b.base - b.h * 0.58;
+
+      ctx.beginPath();
+      ctx.moveTo(b.x, b.base);
+      ctx.quadraticCurveTo(ctrlX, ctrlY, tipX, tipY);
+      ctx.lineWidth = b.w;
+      ctx.lineCap = 'round';
+      ctx.strokeStyle = 'rgba(' + b.col + ',' + b.a + ')';
+      ctx.stroke();
+
+      if(b.w > 1.4 && b.a > 0.8){
+        var flick = 0.5 + 0.5 * Math.sin(ts * 0.002 + b.sway * 2.1);
+        ctx.beginPath();
+        ctx.arc(tipX, tipY, 0.9, 0, Math.PI * 2);
+        ctx.fillStyle = 'rgba(180,200,226,' + (0.10 + flick * 0.16) + ')';
+        ctx.fill();
+      }
+    }
+
+    for(var si = seeds.length - 1; si >= 0; si--){
+      var sd = seeds[si];
+      sd.life -= dt / 5200;
+      if(sd.life <= 0 || sd.y < -40){
+        seeds.splice(si, 1);
+        continue;
+      }
+      sd.vy += (-0.006 - sd.drag) * (dt / 16);
+      sd.vx += Math.sin(ts * 0.0012 + sd.ph) * 0.012 * (dt / 16);
+      sd.vx *= 0.995;
+      sd.x += sd.vx * (dt / 16);
+      sd.y += sd.vy * (dt / 16);
+
+      ctx.beginPath();
+      ctx.arc(sd.x, sd.y, sd.r, 0, Math.PI * 2);
+      ctx.fillStyle = 'rgba(226,232,242,' + (sd.life * 0.62) + ')';
+      ctx.fill();
+
+      ctx.beginPath();
+      ctx.arc(sd.x, sd.y, sd.r * 3.4, 0, Math.PI * 2);
+      ctx.fillStyle = 'rgba(200,214,238,' + (sd.life * 0.06) + ')';
+      ctx.fill();
+    }
+
+    if(!document.hidden && Math.random() < 0.012 && seeds.length < 26){
+      seeds.push({
+        x: Math.random() * W,
+        y: H * (0.62 + Math.random() * 0.34),
+        vx: (Math.random() - 0.5) * 0.16,
+        vy: -0.16 - Math.random() * 0.22,
+        r: 0.7 + Math.random() * 1.1,
+        drag: Math.random() * 0.004,
+        life: 1,
+        ph: Math.random() * Math.PI * 2
+      });
+    }
+
+    requestAnimationFrame(loop);
+  }
+
+  function prunePlaced(){
+    var out = [];
+    for(var i = 0; i < placed.length; i++){
+      var p = placed[i];
+      if(p.el && p.el.parentNode === wordsBox) out.push(p);
+    }
+    placed = out;
+  }
+
+  function overlap(a, b){
+    return !(a.r < b.l || a.l > b.r || a.b < b.t || a.t > b.b);
+  }
+
+  function fadeOutOldest(){
+    prunePlaced();
+    if(!placed.length) return;
+    var p = placed.shift();
+    if(p.el && p.el.parentNode){
+      p.el.style.animation = 'none';
+      p.el.style.transition = 'opacity .5s ease';
+      p.el.style.opacity = '0';
+      setTimeout(function(el){
+        if(el && el.parentNode) el.parentNode.removeChild(el);
+      }, 520, p.el);
+      setTimeout(prunePlaced, 540);
+    }
+  }
+
+  function say(text, x, y, cls){
+    var el = document.createElement('div');
+    el.className = 'word' + (cls ? ' ' + cls : '');
+    el.textContent = text;
+    el.style.left = '-9999px';
+    el.style.top = '0px';
+    wordsBox.appendChild(el);
+
+    var w = el.offsetWidth;
+    var h = el.offsetHeight;
+
+    var cx = Math.min(Math.max(x, w / 2 + 16), W - w / 2 - 16);
+    var baseY = Math.min(Math.max(y, 150), H - 150);
+
+    var topSafe = 132;
+    var bottomSafe = H - 82;
+
+    var cand = [];
+    for(var k = 0; k < 11; k++){
+      var sign = (k % 2 === 0) ? -1 : 1;
+      var step = Math.ceil(k / 2);
+      cand.push(baseY + sign * step * (h + 26));
+    }
+
+    var chosen = null;
+    for(var i = 0; i < cand.length; i++){
+      var ty = cand[i];
+      if(ty < topSafe) continue;
+      if(ty + h > bottomSafe) continue;
+      var rc = { l: cx - w / 2 - 8, t: ty - 8, r: cx + w / 2 + 8, b: ty + h + 8 };
+      var hit = false;
+      for(var j = 0; j < placed.length; j++){
+        if(overlap(rc, placed[j].rect)){ hit = true; break; }
+      }
+      if(!hit){ chosen = { y: ty, rect: rc }; break; }
+    }
+
+    if(!chosen){
+      fadeOutOldest();
+      var ty2 = Math.min(Math.max(baseY, topSafe), bottomSafe - h);
+      chosen = { y: ty2, rect: { l: cx - w / 2 - 8, t: ty2 - 8, r: cx + w / 2 + 8, b: ty2 + h + 8 } };
+    }
+
+    el.style.left = cx + 'px';
+    el.style.top  = chosen.y + 'px';
+
+    placed.push({ el: el, rect: chosen.rect });
+    prunePlaced();
+    while(placed.length > 3) fadeOutOldest();
+
+    setTimeout(function(){
+      if(el && el.parentNode) el.parentNode.removeChild(el);
+      prunePlaced();
+    }, 6600);
+  }
+
+  function pickLine(){
+    var r = Math.random();
+    if(r < 0.34) return { t: SHORT[(Math.random() * SHORT.length) | 0], c: 'short' };
+    if(r < 0.86) return { t: MID[(Math.random() * MID.length) | 0], c: '' };
+    return { t: LONG[(Math.random() * LONG.length) | 0], c: 'long' };
+  }
+
+  function addGust(x, y, power){
+    gusts.push({
+      x: x, y: y,
+      r: Math.min(W, H) * 0.30,
+      life: 1,
+      power: power
+    });
+    if(gusts.length > 12) gusts.shift();
+  }
+
+  function puff(x, y, n){
+    for(var i = 0; i < n; i++){
+      var ang = Math.random() * Math.PI * 2;
+      var sp  = Math.random() * 1.6 + 0.4;
+      seeds.push({
+        x: x + Math.cos(ang) * Math.random() * 14,
+        y: y + Math.sin(ang) * Math.random() * 8,
+        vx: Math.cos(ang) * sp * 0.36,
+        vy: -0.42 - Math.random() * 0.5,
+        r: 0.8 + Math.random() * 1.2,
+        drag: Math.random() * 0.005,
+        life: 1,
+        ph: Math.random() * Math.PI * 2
+      });
+    }
+    if(seeds.length > 80) seeds.splice(0, seeds.length - 80);
+  }
+
+  var down = false, downX = 0, downY = 0, downT = 0;
+  var lastPuffX = 0, lastPuffY = 0, moved = 0;
+
+  function onStart(x, y){
+    down = true;
+    downX = x; downY = y;
+    downT = Date.now();
+    moved = 0;
+    lastPuffX = x; lastPuffY = y;
+    addGust(x, y, 1);
+  }
+
+  function onMove(x, y){
+    if(!down) return;
+    var dx = x - lastPuffX;
+    var dy = y - lastPuffY;
+    var d  = Math.sqrt(dx * dx + dy * dy);
+    moved += d;
+    if(d > 14){
+      addGust(x, y, 1);
+      lastPuffX = x; lastPuffY = y;
+      if(Math.random() < 0.35) puff(x, y + 10, 1);
+    }
+  }
+
+  function onEnd(x, y){
+    if(!down) return;
+    down = false;
+    var dt = Date.now() - downT;
+
+    if(moved < 26 && dt < 900){
+      puff(x, y, 9 + ((Math.random() * 6) | 0));
+      var L = pickLine();
+      say(L.t, x, y - 34, L.c);
+    }
+  }
+
+  document.addEventListener('touchstart', function(e){
+    if(e.touches.length){ onStart(e.touches[0].clientX, e.touches[0].clientY); }
+  }, { passive: true });
+
+  document.addEventListener('touchmove', function(e){
+    if(e.touches.length){ onMove(e.touches[0].clientX, e.touches[0].clientY); }
+  }, { passive: true });
+
+  document.addEventListener('touchend', function(e){
+    var t = e.changedTouches && e.changedTouches[0];
+    if(t) onEnd(t.clientX, t.clientY);
+  }, { passive: true });
+
+  document.addEventListener('mousedown', function(e){
+    onStart(e.clientX, e.clientY);
+  });
+  document.addEventListener('mousemove', function(e){
+    onMove(e.clientX, e.clientY);
+  });
+  document.addEventListener('mouseup', function(e){
+    onEnd(e.clientX, e.clientY);
+  });
+
+  window.addEventListener('resize', function(){
+    resize();
+    makeClouds();
+  });
+  window.addEventListener('orientationchange', function(){
+    setTimeout(function(){ resize(); makeClouds(); }, 260);
+  });
+
+  resize();
+  makeClouds();
+  requestAnimationFrame(loop);
+
+  setTimeout(function(){
+    veil.classList.add('gone');
+    setTimeout(function(){
+      if(veil.parentNode) veil.parentNode.removeChild(veil);
+    }, 2000);
+  }, 400);
+
+  setTimeout(function(){
+    for(var i = 0; i < 10; i++){
+      (function(n){
+        setTimeout(function(){
+          seeds.push({
+            x: Math.random() * W,
+            y: H * (0.68 + Math.random() * 0.28),
+            vx: (Math.random() - 0.5) * 0.12,
+            vy: -0.2 - Math.random() * 0.24,
+            r: 0.8 + Math.random() * 1,
+            drag: Math.random() * 0.004,
+            life: 1,
+            ph: Math.random() * Math.PI * 2
+          });
+        }, n * 260);
+      })(i);
+    }
+  }, 1200);
+
+})();
+</script>
+</body>
+</html>
