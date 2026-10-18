@@ -63,6 +63,7 @@ canvas{position:fixed;inset:0;display:block;}
   text-indent:.42em;
   color:rgba(180,190,208,.34);
   font-weight:300;
+  transition:opacity .9s;
 }
 
 #words{position:fixed;inset:0;pointer-events:none;z-index:5;}
@@ -306,6 +307,8 @@ canvas{position:fixed;inset:0;display:block;}
       ctx.fill();
     }
   }
+
+  var windPhase = 0;
 
   function windAt(t){
     return Math.sin(t * 0.00016) * 0.55 + Math.sin(t * 0.00041 + 1.7) * 0.28;
